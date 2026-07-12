@@ -8,7 +8,9 @@
 
 ## Dataset
 Name: LLM-AggreFact (Large Language Model Aggregated Fact Verification Benchmark)
+
 Source: Curated by Liyan Tang, Philippe Laban, and Greg Durrett
+
 Link: https://huggingface.co/datasets/lytang/LLM-AggreFact
 
 ## Summary
