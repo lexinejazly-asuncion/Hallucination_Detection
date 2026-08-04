@@ -1,16 +1,21 @@
-"""
-preprocess.py
-Pure functional preprocessing, text normalization, and feature extraction
-for hallucination detection.
-"""
-
 import re
 import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sentence_transformers import SentenceTransformer
 
 STOPWORDS = set("a an the and or but if that this these those of to as be been being it its so such".split())
+
+# The feature columns that get fed into the logistic regression model.
+NUMERIC_FEATS = [
+    "coverage",
+    "bigram_cov",
+    "num_grounded",
+    "has_novel_num",
+    "claim_len",
+    "n_content_words",
+    "lexical_sim",
+    "semantic_sim",
+]
+
 
 def normalize(text):
     """Normalize raw text inputs."""
@@ -64,7 +69,7 @@ def overlap_features(row):
 
 
 def preprocess_dataframe(df):
-    """Add clean text columns and overlap feature set to DataFrame."""
+    """Add clean text columns and lexical-overlap feature set to a doc/claim DataFrame."""
     df_copy = df.copy()
     df_copy["doc_clean"] = df_copy["doc"].apply(normalize)
     df_copy["claim_clean"] = df_copy["claim"].apply(normalize)
@@ -72,27 +77,19 @@ def preprocess_dataframe(df):
     return pd.concat([df_copy, feats], axis=1)
 
 
-def fit_tfidf_vectorizer(train_df):
-    """Fit and return a TF-IDF Vectorizer on normalized training documents and claims."""
-    train_processed = preprocess_dataframe(train_df)
-    corpus = pd.concat([train_processed["doc_clean"], train_processed["claim_clean"]])
-    tfidf = TfidfVectorizer(max_features=3000, ngram_range=(1, 2), min_df=3, sublinear_tf=True)
-    tfidf.fit(corpus)
-    return tfidf
-
-
 def compute_lexical_sim(df, tfidf):
-    """Compute lexical TF-IDF cosine similarity between document and claim."""
+    """Compute lexical TF-IDF cosine similarity between document and claim.
+
+    Assumes df already has 'doc_clean' and 'claim_clean' columns
+    (i.e. df has already been through preprocess_dataframe).
+    """
     d = tfidf.transform(df["doc_clean"])
     c = tfidf.transform(df["claim_clean"])
     return np.asarray(d.multiply(c).sum(axis=1)).flatten()
 
 
-def compute_semantic_sim(df, embedding_model=None):
-    """Compute semantic embedding cosine similarity using SentenceTransformer."""
-    if embedding_model is None:
-        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        
+def compute_semantic_sim(df, embedding_model):
+    """Compute semantic embedding cosine similarity using a SentenceTransformer."""
     d = embedding_model.encode(df["doc_clean"].tolist(), convert_to_numpy=True, show_progress_bar=False)
     c = embedding_model.encode(df["claim_clean"].tolist(), convert_to_numpy=True, show_progress_bar=False)
     d = d / (np.linalg.norm(d, axis=1, keepdims=True) + 1e-9)
@@ -100,9 +97,13 @@ def compute_semantic_sim(df, embedding_model=None):
     return np.sum(d * c, axis=1)
 
 
-def transform_features(df, tfidf, numeric_feats, embedding_model=None):
-    """Transforms raw text DataFrame into feature matrix X using fitted transformers."""
-    processed_df = preprocess_dataframe(df)
-    processed_df["lexical_sim"] = compute_lexical_sim(processed_df, tfidf)
-    processed_df["semantic_sim"] = compute_semantic_sim(processed_df, embedding_model)
-    return processed_df[numeric_feats]
+def transform_features(df, tfidf, numeric_feats, embedding_model):
+    """End-to-end: raw doc/claim DataFrame -> feature matrix ready for the model.
+
+    Used identically at training time (on the full training set) and at
+    inference time (on a single-row DataFrame built from user input).
+    """
+    processed = preprocess_dataframe(df)
+    processed["lexical_sim"] = compute_lexical_sim(processed, tfidf)
+    processed["semantic_sim"] = compute_semantic_sim(processed, embedding_model)
+    return processed[numeric_feats]

@@ -1,45 +1,39 @@
 import streamlit as st
-import joblib
-from sentence_transformers import SentenceTransformer
-from model import predict_hallucination
 
-st.set_page_config(page_title="AI Hallucination Detector", layout="centered")
+from Model.classifier import predict_hallucination
 
-@st.cache_resource
-def load_assets():
-    model = joblib.load("random_forest_model.joblib")
-    tfidf = joblib.load("tfidf_vectorizer.joblib")
-    threshold = joblib.load("threshold.joblib")
-    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return model, tfidf, threshold, embedding_model
+st.set_page_config(page_title="Hallucination Detector", page_icon="🔍")
 
-model, tfidf, threshold, embedding_model = load_assets()
+st.title("Hallucination Detector")
+st.write(
+    "Paste a source document and a claim below. The model checks whether "
+    "the claim is supported by the document, or whether it's "
+    "hallucinated content not grounded in the text."
+)
 
-# Inputs
-doc_input = st.text_area("Source Document", height=200, placeholder="Paste original source text here...")
-claim_input = st.text_area("Claim to Verify", height=100, placeholder="Paste generated claim here...")
+document_text = st.text_area(
+    "Document", height=250, placeholder="Paste the source document here..."
+)
+claim_text = st.text_area(
+    "Claim", height=100, placeholder="Paste the claim you want to verify here..."
+)
 
-if st.button("Analyze Claim"):
-    if not doc_input.strip() or not claim_input.strip():
-            st.warning("Please provide both a source document and a claim.")
+THRESHOLD = 0.50
+
+if st.button("Classify", type="primary"):
+    if not document_text.strip() or not claim_text.strip():
+        st.warning("Please provide both a document and a claim.")
     else:
-        with st.spinner("Analyzing claim against source document..."):
-            res = predict_hallucination(
-                model=model,
-                tfidf=tfidf,
-                document_text=doc_input,
-                claim_text=claim_input,
-                embedding_model=embedding_model,
-                threshold=threshold
-            )
-
-        st.divider()
-        if res["output"] == "Supported":
-            st.success(f"### Result: {res['output']}")
+        try:
+            with st.spinner("Running model..."):
+                result = predict_hallucination(document_text, claim_text, threshold=THRESHOLD)
+        except FileNotFoundError as e:
+            st.error(str(e))
         else:
-            st.error(f"### Result: {res['output']}")
+            label = result["output"]
+            probability = result["probability"]
 
-        st.metric(label="Groundedness Probability", value=f"{res['probability']:.2%}")
-        st.caption(f"Decision Threshold: {threshold:.2f}")
-
-   
+            if label == "Supported":
+                st.success(f"Claim is likely Supported — probability: {probability:.2%}")
+            else:
+                st.error(f"Claim is likely Hallucinated — probability: {probability:.2%}")

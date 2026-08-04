@@ -22,3 +22,80 @@ Link: https://huggingface.co/datasets/lytang/LLM-AggreFact
 
 ______________________________________________________________________________________________________________________
 
+
+## First Time Set Up  
+### Prerequisites  
+1. Install Python  
+
+### Downloading dependencies 
+Create a local copy of the repository:  
+```
+git clone https://github.com/lexinejazly-asuncion/Hallucination_Detection.git
+```
+
+Make sure you are in the correct folder: 'Hallucination_Detection', if not run:
+```
+cd Hallucination_Detection
+```
+
+This application runs on a virtual environment.   
+To create a virtual environment:  
+```
+python3 -m venv venv
+```
+*Note: Creating a virtual environment only needs to be done the first time the project is set up.*  
+
+Activate the virtual environment:  
+```
+. venv/bin/activate
+```
+Install application dependencies and libraries:  
+```
+pip install -r requirements.txt
+```
+
+
+## How to run this application  
+### Step 0a: Check that the virtual environment is activated  
+If your virtual environment is activated, it should say (venv) in your command line (Go to Step 0b)  
+If it's not, activate the virtual environment:  
+```
+. venv/bin/activate
+```
+
+### Step 0b: Check if the Models and Data are initialized
+If they are initialized, you will see 2 files in the ./Artifacts directory: logistic_regression_model_joblib, tfidf_vectorizer.joblib  (SKIP to Step 1)  
+If any of these 3 files are missing, delete the Artifacts folder (if it exists) 
+
+**IMPORTANT**: This step must be completed when starting the web application for the first time!   
+
+Run the main.py script:  
+```
+python3 main.py
+```
+
+This process will:  
+- Pre-process the dataset 
+- Train the Lexical (TF-IDF) and Semantic (Sentence Transformer) models   
+- Save all models to the ./Artifacts directory  
+
+### Step 0c: Authorize use for dataset
+
+Run the main.py script:  
+```
+huggingface-cli login
+hf auth login
+```
+NOTE: You need to have access to the dataset to train the model
+
+### Step 1: Run the Streamlit app
+
+Run the app.py script:
+```
+streamlit run app.py
+```
+
+Deactivate virtual environment: 
+```
+deactivate
+```
