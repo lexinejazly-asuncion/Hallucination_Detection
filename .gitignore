@@ -8,6 +8,3 @@ venv/
 # IDEs 
 .idea/
 .vscode/
-
-# Trained models
-Artifacts/
