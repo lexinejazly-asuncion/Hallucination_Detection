@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallucination Detection for RAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF1EF;
+    --paper-raised:#F8F9F8;
+    --ink:#1B2430;
+    --ink-soft:#4A5560;
+    --rule:#C7CDC9;
+    --supported:#2F6F4E;
+    --supported-bg:#E4EFE8;
+    --hallucinated:#B23A2F;
+    --hallucinated-bg:#F5E7E4;
+    --accent:#3D5A80;
+    --accent-dark:#2C4160;
+    --max:920px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Source Serif 4', Georgia, serif;
+    font-size:17px;
+    line-height:1.6;
+  }
+  .wrap{max-width:var(--max); margin:0 auto; padding:0 24px;}
+  h1,h2,h3{font-family:'Fraunces', Georgia, serif; font-weight:700; margin:0 0 .4em;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 10px;
+  }
+  a{color:var(--accent);}
+  code, .mono{font-family:'IBM Plex Mono', monospace;}
+
+  /* ---------- header ---------- */
+  header.hero{padding:72px 0 40px; border-bottom:1px solid var(--rule);}
+  header.hero h1{font-size:clamp(2.1rem, 4.4vw, 3.1rem); line-height:1.08; letter-spacing:-.01em;}
+  header.hero p.lede{font-size:1.15rem; color:var(--ink-soft); max-width:640px; margin:0 0 28px;}
+  .cta-row{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:8px;}
+  .btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13.5px;
+    letter-spacing:.02em;
+    padding:11px 20px;
+    border-radius:3px;
+    text-decoration:none;
+    display:inline-block;
+    border:1px solid transparent;
+  }
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-secondary{background:transparent; color:var(--ink); border-color:var(--ink);}
+  .btn-secondary:hover{background:var(--ink); color:var(--paper);}
+
+  /* ---------- evidence card (signature element) ---------- */
+  .case-file{
+    margin-top:44px;
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .case-file-tabs{
+    display:flex;
+    border-bottom:1px solid var(--rule);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+  }
+  .case-file-tabs button{
+    flex:1;
+    padding:13px 10px;
+    background:none;
+    border:none;
+    border-right:1px solid var(--rule);
+    cursor:pointer;
+    color:var(--ink-soft);
+    letter-spacing:.03em;
+  }
+  .case-file-tabs button:last-child{border-right:none;}
+  .case-file-tabs button.active{background:var(--paper); color:var(--ink); font-weight:600;}
+  .case-file-tabs button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px;}
+
+  .case-body{padding:24px 26px 26px;}
+  .doc-label{font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
+  .doc-text{font-size:15px; color:var(--ink-soft); line-height:1.55; padding-bottom:16px; margin-bottom:16px; border-bottom:1px dashed var(--rule);}
+  .claim-text{font-size:17px; line-height:1.7;}
+  .tok{padding:1px 2px; border-radius:2px;}
+  .tok.match{background:var(--supported-bg); color:var(--supported);}
+  .tok.novel{background:var(--hallucinated-bg); color:var(--hallucinated); text-decoration:line-through; text-decoration-thickness:1px;}
+  .verdict-row{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:20px; flex-wrap:wrap;}
+  .stamp{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:.05em;
+    padding:6px 14px;
+    border-radius:3px;
+    border:1.5px solid currentColor;
+  }
+  .stamp.supported{color:var(--supported);}
+  .stamp.hallucinated{color:var(--hallucinated);}
+  .prob{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink-soft);}
+  .case-note{font-size:14px; color:var(--ink-soft); margin-top:14px; padding-top:14px; border-top:1px solid var(--rule);}
+
+  /* ---------- generic sections ---------- */
+  section{padding:56px 0; border-bottom:1px solid var(--rule);}
+  section:last-of-type{border-bottom:none;}
+  section p{color:var(--ink-soft); max-width:680px;}
+  .steps{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:22px; margin-top:28px;}
+  .step{padding:20px 20px 22px; background:var(--paper-raised); border:1px solid var(--rule); border-radius:4px;}
+  .step .num{font-family:'IBM Plex Mono', monospace; color:var(--accent); font-size:13px; margin-bottom:8px;}
+  .step h3{font-size:1.05rem; margin-bottom:6px;}
+  .step p{font-size:14.5px; margin:0;}
+
+  .metrics{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin-top:28px; border-radius:4px; overflow:hidden;}
+  .metric{background:var(--paper-raised); padding:20px 18px;}
+  .metric .val{font-family:'IBM Plex Mono', monospace; font-size:1.9rem; font-weight:600; color:var(--ink);}
+  .metric .lbl{font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); margin-top:4px;}
+
+  .limitation{
+    margin-top:24px;
+    background:var(--hallucinated-bg);
+    border:1px solid #DAB9B3;
+    border-radius:4px;
+    padding:20px 22px;
+  }
+  .limitation .eyebrow{color:var(--hallucinated);}
+  .limitation p{color:var(--ink); margin:0;}
+
+  .team-list{display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:20px; font-family:'IBM Plex Mono', monospace; font-size:14px; color:var(--ink-soft); padding:0; list-style:none;}
+
+  footer{padding:32px 0 60px; font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink-soft);}
+  footer a{color:var(--ink-soft);}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">AI4ALL Ignite · Group 11B</p>
+    <h1>Does the source actually say that?</h1>
+    <p class="lede">A classifier that checks whether a claim produced by a RAG system is really backed by the document it cites, so ungrounded output gets flagged before a person trusts it.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="PASTE_STREAMLIT_URL_HERE">Try the live demo →</a>
+      <a class="btn btn-secondary" href="https://github.com/lexinejazly-asuncion/Hallucination_Detection">View source on GitHub</a>
+    </div>
+
+    <div class="case-file" id="caseFile">
+      <div class="case-file-tabs" role="tablist" aria-label="Example claims">
+        <button class="active" data-case="0" role="tab" aria-selected="true">01 · Grounded</button>
+        <button data-case="1" role="tab" aria-selected="false">02 · Fabricated</button>
+        <button data-case="2" role="tab" aria-selected="false">03 · The limitation</button>
+      </div>
+      <div class="case-body">
+        <div class="doc-label">Source document</div>
+        <div class="doc-text">The Cascade Reservoir Authority approved a $4.2 million upgrade to the Fairview treatment plant in March 2023. The project replaces four sand filtration units installed in 1978. Authority engineers said the existing filters were operating at roughly 60 percent of their rated capacity.</div>
+        <div class="doc-label">Claim under review</div>
+        <div class="claim-text" id="claimText"></div>
+        <div class="verdict-row">
+          <span class="stamp" id="stampEl">SUPPORTED</span>
+          <span class="prob" id="probEl">P(grounded) = 0.91</span>
+        </div>
+        <div class="case-note" id="noteEl"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">Pipeline</p>
+    <h2>How a claim gets checked</h2>
+    <p>The order matters. Splitting before any preprocessing keeps the held-out set honest, and features are audited before they're trusted.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Split first</h3>
+        <p>Stratified on label and source dataset together, so no source dominates training and a sealed test set never gets touched during development.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Measure overlap</h3>
+        <p>Word and bigram coverage between claim and document, plus whether every number in the claim actually appears in the source.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Add meaning</h3>
+        <p>Sentence embeddings catch paraphrases that share no exact wording with the source, on top of the lexical features.</p>
+      </div>
+      <div class="step">
+        <div class="num">04</div>
+        <h3>Classify and score</h3>
+        <p>A calibrated classifier returns a grounded/hallucinated call with a probability, not just a binary label.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">Validation results</p>
+    <h2>What the numbers say, and what they hide</h2>
+    <p>Supported claims outnumber unsupported ones roughly 3 to 1 in the training data, so accuracy alone rewards a model that mostly guesses "supported." These numbers weight the class that actually matters.</p>
+    <div class="metrics">
+      <div class="metric"><div class="val">0.847</div><div class="lbl">AUC&#8211;ROC</div></div>
+      <div class="metric"><div class="val">57%</div><div class="lbl">Hallucinations caught</div></div>
+      <div class="metric"><div class="val">11</div><div class="lbl">Source datasets</div></div>
+      <div class="metric"><div class="val">~60k</div><div class="lbl">Claim&#8211;document pairs</div></div>
+    </div>
+
+    <div class="limitation">
+      <p class="eyebrow">Known limitation</p>
+      <p>Overlap-based features can't catch a claim that reuses the document's own words and rearranges them into something the document never said. Every word checks out; the meaning doesn't. Tab 03 above shows this happening live &mdash; it's a gap in how meaning is represented, not a wall, and a cross-encoder that reads claim and document together is the planned fix.</p>
+    </div>
+  </div>
+</section>
+
+<section id="team">
+  <div class="wrap">
+    <p class="eyebrow">Team</p>
+    <h2>Group 11B</h2>
+    <p>Built for AI4ALL Ignite.</p>
+    <ul class="team-list">
+      <li>Lexine Asuncion</li>
+      <li>Santhosh Senthil</li>
+      <li>Sid Shekhar</li>
+      <li>Amos Abdulai</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Dataset: <a href="https://huggingface.co/datasets/lytang/LLM-AggreFact">LLM-AggreFact</a> (Tang, Laban &amp; Durrett) &nbsp;·&nbsp; <a href="https://github.com/lexinejazly-asuncion/Hallucination_Detection">Source code</a>
+  </div>
+</footer>
+
+<script>
+  const cases = [
+    {
+      claim: [
+        ["Four filtration units", "match"], [" ", ""], ["dating from 1978", "match"], [" ", ""],
+        ["will be replaced", "match"], [" under the plan.", ""]
+      ],
+      stamp: "SUPPORTED", stampClass: "supported", prob: "P(grounded) = 0.88",
+      note: "Reworded, not copied. Coverage is lower than a verbatim lift, so this leans on semantic similarity rather than exact word matches."
+    },
+    {
+      claim: [
+        ["The upgrade was approved in March 2023", "match"], [" at a cost of ", ""],
+        ["$9.7 million", "novel"], [".", ""]
+      ],
+      stamp: "HALLUCINATED", stampClass: "hallucinated", prob: "P(grounded) = 0.12",
+      note: "One invented figure is enough to flag the claim: the numeric-grounding feature fires the moment a number in the claim has no match in the source."
+    },
+    {
+      claim: [
+        ["The Fairview treatment plant approved a $4.2 million upgrade to the", "match"], [" ", ""],
+        ["Cascade Reservoir Authority", "match"], [".", ""]
+      ],
+      stamp: "SUPPORTED", stampClass: "supported", prob: "P(grounded) = 0.79",
+      note: "Every word here appears in the source \u2014 the subject and object are just swapped. Word-overlap features see near-total coverage and miss it entirely. This is the model's real ceiling, not a display bug."
+    }
+  ];
+
+  function render(i){
+    const c = cases[i];
+    const claimEl = document.getElementById('claimText');
+    claimEl.innerHTML = c.claim.map(([text, cls]) => cls ? `<span class="tok ${cls}">${text}</span>` : text).join('');
+    const stampEl = document.getElementById('stampEl');
+    stampEl.textContent = c.stamp;
+    stampEl.className = 'stamp ' + c.stampClass;
+    document.getElementById('probEl').textContent = c.prob;
+    document.getElementById('noteEl').textContent = c.note;
+
+    document.querySelectorAll('.case-file-tabs button').forEach((btn, idx) => {
+      const active = idx === i;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active);
+    });
+  }
+
+  document.querySelectorAll('.case-file-tabs button').forEach((btn, idx) => {
+    btn.addEventListener('click', () => render(idx));
+  });
+
+  render(0);
+</script>
+
+</body>
+</html>
